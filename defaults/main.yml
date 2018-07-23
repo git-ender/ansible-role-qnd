@@ -1,0 +1,22 @@
+---
+containers:
+  "ol7-1":
+    image: ol7
+    tag: latest
+    ipv4: 172.16.10.10
+    ssh_from_host: True
+
+  "ol7-2":
+    image: ol7
+    tag: latest
+    ipv4: 172.16.10.11
+    ssh_from_host: False
+
+# Network section
+network_name: "MyNet"
+subnet_class: "172.16.10.0/28"
+gateway: "172.16.10.1"
+
+dockerfile_path: "./{{role_name}}/files"
+key_to_keep: "container_key"
+test_container: ol7-1

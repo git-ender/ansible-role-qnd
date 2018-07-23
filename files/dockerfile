@@ -1,0 +1,22 @@
+FROM oraclelinux:latest
+
+ARG ssh_key="./id_rsa.pub"
+
+# Test if user key is provided
+RUN test -n "$ssh_key"
+
+# Not needed on OL7, added as a reference
+# RUN yum install -y openssh-server 
+
+# Create default ssh keys
+RUN ssh-keygen -f /etc/ssh/ssh_host_rsa_key -N '' -t rsa
+RUN ssh-keygen -f /etc/ssh/ssh_host_dsa_key -N '' -t dsa
+RUN ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
+RUN ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
+
+RUN ssh-keygen -f ~/.ssh/id_rsa  -C "container_key" -q -N '' -t rsa
+RUN touch ~/.ssh/authorized_keys
+COPY "$ssh_key" "/root/.ssh/authorized_keys"
+RUN cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys && chmod 400 ~/.ssh/authorized_keys
+
+CMD ["/usr/sbin/sshd", "-D"]

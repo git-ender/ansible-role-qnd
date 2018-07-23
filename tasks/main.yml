@@ -1,0 +1,68 @@
+---
+- name: Build image from dockerfile
+  docker_image:
+    name: "{{ item.value.image }}"
+    path: "{{ dockerfile_path }}"
+    state: present
+  with_dict: "{{ containers }}"
+
+- name: Create network
+  docker_network:
+    name: "{{ network_name }}"
+    ipam_options:
+      subnet: "{{ subnet_class }}"
+
+- name: Start containers with default values
+  docker_container:
+    name: "{{ item.key }}"
+    image: "{{ item.value.image }}:{{ item.value.tag }}"
+    state: started
+    networks:
+      - name: "{{ network_name }}"
+        ipv4_address: "{{ item.value.ipv4 }}"
+        aliases:
+          - "{{ item.key }}"
+  when: not item.value.ssh_from_host
+  with_dict: "{{ containers }}"
+
+- name: Start containers with exposed port
+  docker_container:
+    name: "{{ item.key }}"
+    image: "{{ item.value.image }}:{{ item.value.tag }}"
+    published_ports: 22
+    state: started
+    networks:
+      - name: "{{ network_name }}"
+        ipv4_address: "{{ item.value.ipv4 }}"
+        aliases:
+          - "{{ item.key }}"
+  when: item.value.ssh_from_host
+  with_dict: "{{ containers }}"
+
+- name: Add containers to inventory
+  add_host:
+    name: "{{ item.key }}"
+    ansible_connection: docker
+  changed_when: False
+  with_dict: "{{ containers }}"
+ 
+- name: Test connectivity
+  wait_for:
+    host: "{{ item.key }}"
+    port: 22
+    state: started
+    delay: 0
+    timeout: 1
+  delegate_to: "{{ test_container }}"
+  with_dict: "{{ containers }}"
+
+- name: Configure firewall on bastion container
+  # Bastion container accept ssh from host only
+  command: docker exec --privileged "{{ item.key }}" bash -c "iptables -F && iptables -A INPUT -i lo -j ACCEPT && iptables -A OUTPUT -o lo -j ACCEPT && iptables -A INPUT -s "{{ gateway }}" -p tcp --dport 22 -j ACCEPT && iptables -A INPUT -p tcp --destination-port 22 -j DROP && iptables-save"
+  when: item.value.ssh_from_host
+  with_dict: "{{ containers }}"
+
+- name: Remove unwanted authorized_keys
+  command: docker exec "{{ item.key }}" sed -i -e '/{{key_to_keep}}/!d' /root/.ssh/authorized_keys
+  when: not item.value.ssh_from_host 
+  with_dict: "{{ containers }}"
